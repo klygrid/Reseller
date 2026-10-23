@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reseller Book</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef0f6;--card:#fff;--ink:#1d1b2e;--mute:#6b6a80;--line:#dcdeea;--acc:#8a1c5c;--accink:#fff;--good:#14794a;--bad:#b3261e;--warn:#9a6700;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141f;--card:#1f1e2c;--ink:#ecebf5;--mute:#9a99b0;--line:#33324a;--acc:#e0589c;--accink:#15141f;--good:#4cc38a;--bad:#ff8a80;--warn:#e3b341}}
+:root[data-theme="dark"]{--bg:#15141f;--card:#1f1e2c;--ink:#ecebf5;--mute:#9a99b0;--line:#33324a;--acc:#e0589c;--accink:#15141f;--good:#4cc38a;--bad:#ff8a80;--warn:#e3b341}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:16px;line-height:1.45;padding-bottom:84px}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:26px;font-weight:800;margin:4px 0 14px}
+h2{font-size:17px;font-weight:600;margin:20px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.hero{background:var(--acc);color:var(--accink);border-radius:14px;padding:18px;margin-bottom:12px}
+.hero b{font-size:38px;font-weight:800;display:block;line-height:1.1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat b{font-size:22px;display:block}
+.stat span,.mute{color:var(--mute);font-size:13px}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 3px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 16px;background:var(--acc);color:var(--accink);cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.small{padding:6px 10px;font-size:13px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
+.Placed{color:var(--warn)}.Shipped{color:var(--acc)}.Delivered{color:var(--good)}.Returned,.Cancelled{color:var(--bad)}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;color:var(--mute);border-radius:0;padding:14px 4px;font-size:14px}
+nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+.empty{text-align:center;color:var(--mute);padding:28px 10px}
+textarea{min-height:120px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav id="nav"></nav>
+<script>
+var KEY="reseller-book-v1",S={orders:[],products:[]},tab="home",editing=null,filter="All";
+try{var raw=localStorage.getItem(KEY);if(raw)S=JSON.parse(raw)}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function rs(n){return "₹"+Math.round(n).toLocaleString("en-IN")}
+function today(){return new Date().toISOString().slice(0,10)}
+function profit(o){var p=(o.sell-o.cost)*o.qty-(o.ship||0);return o.status==="Delivered"?p:o.status==="Returned"?-(o.ship||0):0}
+var STATUS=["Placed","Shipped","Delivered","Returned","Cancelled"];
+var TABS=[["home","Summary"],["orders","Orders"],["products","Products"],["backup","Backup"]];
+
+function render(){
+ $("nav").innerHTML=TABS.map(function(t){return '<button class="'+(tab===t[0]?"on":"")+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'}).join("");
+ var v={home:home,orders:orders,products:products,backup:backup,form:orderForm,pform:productForm}[tab];
+ $("app").innerHTML=v();window.scrollTo(0,0);
+}
+function go(t){tab=t;editing=null;render()}
+
+function home(){
+ var d=S.orders.filter(function(o){return o.status==="Delivered"}),prof=0,pend=0,ret=0,cash=0;
+ S.orders.forEach(function(o){prof+=profit(o);if(o.status==="Placed"||o.status==="Shipped"){pend++;cash+=(o.sell-o.cost)*o.qty}if(o.status==="Returned")ret++});
+ var m=today().slice(0,7),mp=0;S.orders.forEach(function(o){if((o.date||"").slice(0,7)===m)mp+=profit(o)});
+ return '<h1>Reseller Book</h1><div class="hero"><span>Total profit (delivered orders)</span><b>'+rs(prof)+'</b><span>This month: '+rs(mp)+'</span></div>'+
+ '<div class="grid"><div class="card stat"><b>'+S.orders.length+'</b><span>Total orders</span></div><div class="card stat"><b>'+d.length+'</b><span>Delivered</span></div>'+
+ '<div class="card stat"><b>'+pend+'</b><span>Waiting to deliver</span></div><div class="card stat"><b>'+ret+'</b><span>Returned</span></div></div>'+
+ '<div class="card stat"><b>'+rs(cash)+'</b><span>Profit expected from pending orders</span></div>'+
+ '<button style="width:100%" onclick="editing=null;tab=\'form\';render()">+ Add new order</button>';
+}
+
+function orders(){
+ var list=S.orders.filter(function(o){return filter==="All"||o.status===filter}).slice().reverse();
+ var h='<h1>Orders</h1><div class="row" style="margin-bottom:10px"><select id="f" onchange="filter=this.value;render()">'+["All"].concat(STATUS).map(function(s){return '<option'+(s===filter?" selected":"")+'>'+s+'</option>'}).join("")+'</select><button onclick="editing=null;tab=\'form\';render()">+ New</button></div>';
+ if(!list.length)return h+'<div class="empty">No orders here yet. Tap New when a customer orders.</div>';
+ return h+list.map(function(o){
+  return '<div class="card"><div class="row"><b>'+esc(o.customer||"Customer")+'</b><span class="tag '+o.status+'">'+o.status+'</span></div>'+
+  '<div>'+esc(o.product)+' × '+o.qty+'</div><div class="mute">'+esc(o.date)+(o.phone?" · "+esc(o.phone):"")+'</div>'+
+  '<div class="row" style="margin-top:8px"><span>Profit: <b>'+rs((o.sell-o.cost)*o.qty-(o.ship||0))+'</b></span><span>'+
+  '<button class="ghost small" onclick="editOrder(\''+o.id+'\')">Edit</button></span></div></div>'}).join("");
+}
+function editOrder(id){editing=id;tab="form";render()}
+function orderForm(){
+ var o=S.orders.filter(function(x){return x.id===editing})[0]||{date:today(),status:"Placed",qty:1,ship:0};
+ var opts='<option value="">Pick a saved product (optional)</option>'+S.products.map(function(p,i){return '<option value="'+i+'">'+esc(p.name)+'</option>'}).join("");
+ return '<h1>'+(editing?"Edit order":"New order")+'</h1><div class="card">'+
+ '<label>Saved product</label><select id="pp" onchange="pick(this.value)">'+opts+'</select>'+
+ '<label>Product name</label><input id="o_product" value="'+esc(o.product)+'">'+
+ '<label>Customer name</label><input id="o_customer" value="'+esc(o.customer)+'">'+
+ '<label>Customer phone</label><input id="o_phone" inputmode="tel" value="'+esc(o.phone)+'">'+
+ '<label>Address</label><textarea id="o_addr" style="min-height:70px">'+esc(o.addr)+'</textarea>'+
+ '<div class="grid"><div><label>Meesho price (what you pay)</label><input id="o_cost" type="number" inputmode="decimal" value="'+(o.cost||"")+'"></div>'+
+ '<div><label>Selling price</label><input id="o_sell" type="number" inputmode="decimal" value="'+(o.sell||"")+'"></div>'+
+ '<div><label>Quantity</label><input id="o_qty" type="number" inputmode="numeric" value="'+o.qty+'"></div>'+
+ '<div><label>Shipping/other cost</label><input id="o_ship" type="number" inputmode="decimal" value="'+(o.ship||0)+'"></div></div>'+
+ '<label>Status</label><select id="o_status">'+STATUS.map(function(s){return '<option'+(s===o.status?" selected":"")+'>'+s+'</option>'}).join("")+'</select>'+
+ '<label>Date</label><input id="o_date" type="date" value="'+esc(o.date)+'">'+
+ '<div class="row" style="margin-top:16px"><button onclick="saveOrder()">Save order</button>'+(editing?'<button class="ghost" onclick="delOrder()">Delete</button>':'')+'<button class="ghost" onclick="go(\'orders\')">Cancel</button></div></div>';
+}
+function pick(i){if(i==="")return;var p=S.products[i];$("o_product").value=p.name;$("o_cost").value=p.cost;$("o_sell").value=p.sell}
+function saveOrder(){
+ var o={id:editing||String(Date.now()),product:$("o_product").value.trim(),customer:$("o_customer").value.trim(),phone:$("o_phone").value.trim(),addr:$("o_addr").value.trim(),
+ cost:+$("o_cost").value||0,sell:+$("o_sell").value||0,qty:+$("o_qty").value||1,ship:+$("o_ship").value||0,status:$("o_status").value,date:$("o_date").value||today()};
+ if(!o.product){alert("Enter the product name.");return}
+ if(editing)S.orders=S.orders.map(function(x){return x.id===editing?o:x});else S.orders.push(o);
+ save();go("orders");
+}
+function delOrder(){if(confirm("Delete this order?")){S.orders=S.orders.filter(function(x){return x.id!==editing});save();go("orders")}}
+
+function products(){
+ var h='<h1>Products</h1><button style="width:100%;margin-bottom:10px" onclick="editing=null;tab=\'pform\';render()">+ Add product</button>';
+ if(!S.products.length)return h+'<div class="empty">Save products you sell often. They fill in prices when you add an order.</div>';
+ return h+S.products.map(function(p,i){return '<div class="card"><div class="row"><b>'+esc(p.name)+'</b><button class="ghost small" onclick="editing='+i+';tab=\'pform\';render()">Edit</button></div>'+
+ '<div class="mute">Cost '+rs(p.cost)+' · Sell '+rs(p.sell)+' · Margin '+rs(p.sell-p.cost)+'</div>'+(p.note?'<div>'+esc(p.note)+'</div>':'')+'</div>'}).join("");
+}
+function productForm(){
+ var p=editing!==null?S.products[editing]:{};
+ return '<h1>'+(editing!==null?"Edit product":"New product")+'</h1><div class="card"><label>Name</label><input id="p_name" value="'+esc(p.name)+'">'+
+ '<div class="grid"><div><label>Meesho price</label><input id="p_cost" type="number" inputmode="decimal" value="'+(p.cost||"")+'"></div><div><label>Your selling price</label><input id="p_sell" type="number" inputmode="decimal" value="'+(p.sell||"")+'"></div></div>'+
+ '<label>Notes (size, color, supplier link)</label><textarea id="p_note" style="min-height:70px">'+esc(p.note)+'</textarea>'+
+ '<div class="row" style="margin-top:16px"><button onclick="saveProduct()">Save product</button>'+(editing!==null?'<button class="ghost" onclick="delProduct()">Delete</button>':'')+'<button class="ghost" onclick="go(\'products\')">Cancel</button></div></div>';
+}
+function saveProduct(){
+ var p={name:$("p_name").value.trim(),cost:+$("p_cost").value||0,sell:+$("p_sell").value||0,note:$("p_note").value.trim()};
+ if(!p.name){alert("Enter the product name.");return}
+ if(editing!==null)S.products[editing]=p;else S.products.push(p);
+ save();go("products");
+}
+function delProduct(){if(confirm("Delete this product?")){S.products.splice(editing,1);save();go("products")}}
+
+function backup(){
+ return '<h1>Backup</h1><div class="card"><p>Your data lives only in this browser. If you clear browser data or change phones, it is lost. Copy a backup now and then, and paste it into WhatsApp "Message yourself" or Notes.</p>'+
+ '<button onclick="doCopy()">Copy backup</button><p id="msg" class="mute"></p>'+
+ '<label>Restore: paste a backup here</label><textarea id="rest"></textarea><button class="ghost" style="margin-top:8px" onclick="doRestore()">Restore from backup</button></div>';
+}
+function doCopy(){
+ var t=JSON.stringify(S);
+ function ok(){$("msg").textContent="Copied. Paste it somewhere safe."}
+ function fb(){var a=document.createElement("textarea");a.value=t;document.body.appendChild(a);a.select();try{document.execCommand("copy");ok()}catch(e){$("msg").textContent="Copy failed. Select the text in the box below instead.";$("rest").value=t}document.body.removeChild(a)}
+ try{navigator.clipboard.writeText(t).then(ok,fb)}catch(e){fb()}
+}
+function doRestore(){
+ try{var d=JSON.parse($("rest").value);if(!d.orders||!d.products)throw 0;if(confirm("This replaces all current data. Continue?")){S=d;save();go("home")}}
+ catch(e){alert("That does not look like a valid backup.")}
+}
+render();
+</script>
+</body>
+</html>
